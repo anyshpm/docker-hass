@@ -1,0 +1,11 @@
+--- request2.py	2022-07-19 16:32:10.545127110 +0800
++++ request.py	2022-07-12 13:42:44.008188483 +0800
+@@ -156,7 +156,7 @@
+         # * None (if no proxy is configured)
+ 
+         if not proxy_url:
+-            proxy_url = os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy')
++            proxy_url = os.environ.get('TELEGRAM_HTTPS_PROXY') or os.environ.get('telegram_https_proxy')
+ 
+         self._con_pool: Union[
+             urllib3.PoolManager,
