@@ -1,9 +1,6 @@
-FROM homeassistant/home-assistant:2023.3.5
+FROM homeassistant/home-assistant:2023.4.6
 
 MAINTAINER Anyshpm Chen<anyshpm@anyshpm.com>
-
-RUN echo 'https://mirrors.ustc.edu.cn/alpine/v3.16/main' > /etc/apk/repositories
-RUN echo 'https://mirrors.ustc.edu.cn/alpine/v3.16/community' >> /etc/apk/repositories
 
 COPY request.diff /tmp
 
