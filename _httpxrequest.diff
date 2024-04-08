@@ -1,6 +1,6 @@
---- _httpxrequest2.py
-+++ _httpxrequest.py
-@@ -140,6 +140,9 @@
+--- _httpxrequest2.py	2024-04-08 12:06:26.170348528 +0800
++++ _httpxrequest.py	2024-04-08 12:07:09.926388443 +0800
+@@ -140,6 +140,10 @@
          proxy: Optional[Union[str, httpx.Proxy, httpx.URL]] = None,
          media_write_timeout: Optional[float] = 20.0,
      ):
