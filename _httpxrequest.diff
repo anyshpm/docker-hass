@@ -1,0 +1,12 @@
+--- _httpxrequest2.py
++++ _httpxrequest.py
+@@ -140,6 +140,9 @@
+         proxy: Optional[Union[str, httpx.Proxy, httpx.URL]] = None,
+         media_write_timeout: Optional[float] = 20.0,
+     ):
++        if proxy_url is None and proxy is None:
++            proxy = os.environ.get('TELEGRAM_HTTPS_PROXY') or os.environ.get('telegram_https_proxy')
++
+         if proxy_url is not None and proxy is not None:
+             raise ValueError("The parameters `proxy_url` and `proxy` are mutually exclusive.")
+ 
