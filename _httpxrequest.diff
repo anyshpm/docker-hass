@@ -5,6 +5,7 @@
          media_write_timeout: Optional[float] = 20.0,
      ):
 +        if proxy_url is None and proxy is None:
++            import os
 +            proxy = os.environ.get('TELEGRAM_HTTPS_PROXY') or os.environ.get('telegram_https_proxy')
 +
          if proxy_url is not None and proxy is not None:
