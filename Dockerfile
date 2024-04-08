@@ -1,4 +1,4 @@
-FROM homeassistant/home-assistant:2024.4.0
+FROM homeassistant/home-assistant:2024.4.1
 
 MAINTAINER Anyshpm Chen<anyshpm@anyshpm.com>
 
