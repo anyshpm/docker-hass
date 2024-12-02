@@ -1,4 +1,4 @@
-FROM homeassistant/home-assistant:2024.11.1
+FROM homeassistant/home-assistant:2024.11.2
 
 LABEL maintainer="Anyshpm Chen <anyshpm@anyshpm.com>"
 
