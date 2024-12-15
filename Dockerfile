@@ -1,7 +1,6 @@
-FROM homeassistant/home-assistant:2024.12.0
+FROM homeassistant/home-assistant:2024.12.1
 
 LABEL maintainer="Anyshpm Chen <anyshpm@anyshpm.com>"
-LABEL org.opencontainers.image.source="https://github.com/anyshpm/hass"
 LABEL org.opencontainers.image.description="Home Assistant with telegram patch"
 
 COPY _httpxrequest.diff /tmp/
