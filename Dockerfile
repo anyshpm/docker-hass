@@ -1,12 +1,15 @@
-FROM homeassistant/home-assistant:2024.11.3
+FROM homeassistant/home-assistant:2024.12.0
 
 LABEL maintainer="Anyshpm Chen <anyshpm@anyshpm.com>"
+LABEL org.opencontainers.image.source="https://github.com/anyshpm/hass"
+LABEL org.opencontainers.image.description="Home Assistant with telegram patch"
 
-COPY _httpxrequest.diff /tmp
+COPY _httpxrequest.diff /tmp/
 
-RUN set -x && \
-    apk add --no-cache --virtual .build-deps patch && \
-    cd /usr/local/lib/python3.*/site-packages/telegram/request/ && \
-    patch _httpxrequest.py < /tmp/_httpxrequest.diff && \
-    rm -f /tmp/_httpxrequest.diff && \
-    apk del .build-deps
+RUN set -x \
+    && apk add --no-cache --virtual .build-deps patch \
+    && cd /usr/local/lib/python3.*/site-packages/telegram/request/ \
+    && patch _httpxrequest.py < /tmp/_httpxrequest.diff \
+    && rm -f /tmp/_httpxrequest.diff \
+    && apk del .build-deps \
+    && rm -rf /var/cache/apk/*
