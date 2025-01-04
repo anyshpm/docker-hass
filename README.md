@@ -1,6 +1,6 @@
-# Home Assistant with Telegram Patch
+# Home Assistant with Telegram Proxy Patch
 
-这是一个修改过的 Home Assistant Docker 镜像,添加了对 Telegram Bot 代理的支持。
+这是一个修改过的 Home Assistant Docker 镜像,添加了对 Telegram 代理支持。
 
 ## 功能特点
 
