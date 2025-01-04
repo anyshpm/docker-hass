@@ -1,7 +1,7 @@
-FROM homeassistant/home-assistant:2024.12.3
+FROM homeassistant/home-assistant:2024.12.4
 
-LABEL maintainer="Anyshpm Chen <anyshpm@anyshpm.com>"
-LABEL org.opencontainers.image.description="Home Assistant with telegram patch"
+LABEL maintainer="Anyshpm Chen <anyshpm@anyshpm.com>" \
+      org.opencontainers.image.description="Home Assistant with telegram patch"
 
 COPY _httpxrequest.diff /tmp/
 
@@ -11,4 +11,5 @@ RUN set -x \
     && patch _httpxrequest.py < /tmp/_httpxrequest.diff \
     && rm -f /tmp/_httpxrequest.diff \
     && apk del .build-deps \
-    && rm -rf /var/cache/apk/*
+    && rm -rf /var/cache/apk/* \
+    && :
