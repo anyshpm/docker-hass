@@ -9,11 +9,12 @@ A modified Home Assistant Docker image with built-in Telegram proxy support for 
 
 ## ✨ Features
 
-- 🏠 **Based on Official Image**: Built on `homeassistant/home-assistant`
+- 🏠 **Based on Official Image**: Built on `homeassistant/home-assistant:2025.4.1`
 - 🤖 **Telegram Bot Proxy**: Automatic proxy support for Telegram Bot API
 - 🔧 **Environment Configuration**: Easy proxy setup via environment variables
 - 🚀 **Drop-in Replacement**: Compatible with existing Home Assistant setups
 - 🔒 **Secure**: Maintains all original Home Assistant security features
+- 🔄 **Auto-Updates**: Automated daily checks for new Home Assistant versions
 
 ## 🚀 Quick Start
 
@@ -103,6 +104,45 @@ docker build -t your-registry/homeassistant:custom .
 ```bash
 docker build --build-arg HA_VERSION=2025.4.2 -t your-registry/homeassistant:custom .
 ```
+
+## 🔄 Automated Updates
+
+This project includes an automated system that keeps the Home Assistant base image up to date:
+
+### 🤖 **Daily Version Checks**
+- Automatically checks for new Home Assistant releases every day at 06:00 UTC
+- Compares the latest available version with the current version in the Dockerfile
+- Only updates when a newer version is actually available
+
+### 🚀 **Automatic Updates Process**
+When a new version is detected, the system:
+1. **Updates** the Dockerfile with the new base image version
+2. **Updates** README badges to reflect the new version
+3. **Tests** the build to ensure compatibility
+4. **Commits** the changes with a descriptive message
+5. **Tags** the release with the Home Assistant version
+6. **Triggers** the CI build pipeline automatically
+7. **Creates** a GitHub issue for manual review
+
+### 🛠️ **Manual Control**
+```bash
+# Trigger manual update check
+gh workflow run update-homeassistant.yml
+
+# Force update even if version is the same
+gh workflow run update-homeassistant.yml -f force_update=true
+
+# Local testing with the provided script
+./scripts/update-homeassistant.sh --dry-run
+```
+
+### 📊 **Monitoring**
+- 💫 All updates create GitHub issues for tracking
+- 🏷️ Release tags are created automatically (e.g., `v2025.4.1`)
+- 🗺️ Detailed logs available in GitHub Actions
+- 📧 Commit messages include links to Home Assistant release notes
+
+> 📝 **Documentation**: See [`docs/AUTO_UPDATE.md`](docs/AUTO_UPDATE.md) for detailed information about the automated update system.
 
 ## 🔍 How It Works
 
