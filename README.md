@@ -91,7 +91,7 @@ Useful for developers testing Telegram bot integrations in various network condi
 
 ### Prerequisites
 ```bash
-git clone https://github.com/yourusername/docker-hass.git
+git clone https://github.com/anyshpm/docker-hass.git
 cd docker-hass
 ```
 
@@ -271,9 +271,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/docker-hass/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/docker-hass/discussions)
-- **Email**: [anyshpm@anyshpm.com](mailto:anyshpm@anyshpm.com)
+- **Issues**: [GitHub Issues](https://github.com/anyshpm/docker-hass/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/anyshpm/docker-hass/discussions)
 
 ---
 
