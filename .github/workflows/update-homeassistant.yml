@@ -21,9 +21,9 @@ jobs:
   check-and-update:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
-      actions: write
+      issues: write
 
     steps:
       - name: 🔍 Checkout repository
@@ -103,6 +103,16 @@ jobs:
             echo "ℹ️ No update needed. Current version $CURRENT is up to date."
           fi
 
+      - name: 🔄 Create update branch
+        if: steps.compare.outputs.needs_update == 'true'
+        run: |
+          LATEST_VERSION="${{ steps.latest-version.outputs.version }}"
+          BRANCH_NAME="update-homeassistant-$LATEST_VERSION"
+          
+          git checkout -b "$BRANCH_NAME"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+        id: branch
+
       - name: 🛠️ Update Dockerfile
         if: steps.compare.outputs.needs_update == 'true'
         run: |
@@ -127,6 +137,27 @@ jobs:
           echo "🔨 Testing Docker build with new version..."
           docker build --no-cache -t test-build:latest .
           echo "✅ Build test successful"
+          
+          # Test that the image can start (basic smoke test)
+          echo "🔍 Running smoke test..."
+          docker run --rm -d --name test-container test-build:latest || true
+          sleep 10
+          
+          # Check if container is running or has exited successfully
+          if docker ps -a --filter "name=test-container" --format "{{.Status}}" | grep -q "Exited (0)"; then
+            echo "✅ Container smoke test passed - exited successfully"
+          elif docker ps --filter "name=test-container" --format "{{.Names}}" | grep -q "test-container"; then
+            echo "✅ Container smoke test passed - still running"
+            docker stop test-container
+          else
+            echo "❌ Container smoke test failed"
+            docker logs test-container || true
+            exit 1
+          fi
+          
+          # Clean up
+          docker rm -f test-container 2>/dev/null || true
+          echo "✅ All tests passed"
 
       - name: 📝 Update README badges
         if: steps.compare.outputs.needs_update == 'true'
@@ -190,58 +221,63 @@ jobs:
 
           - Updated Dockerfile base image to homeassistant/home-assistant:$LATEST_VERSION
           - Updated README badges to reflect new version
-          - Verified build compatibility
+          - Verified build compatibility and smoke tests
 
           Auto-updated by GitHub Actions on $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
           
           git commit -m "$COMMIT_MSG"
           echo "commit_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-      - name: 🚀 Push changes
+      - name: 🚀 Push update branch
         if: steps.compare.outputs.needs_update == 'true'
         run: |
-          # Push directly to main branch
-          git push origin HEAD:main
+          # Push the update branch
+          git push origin "${{ steps.branch.outputs.branch_name }}"
 
-      - name: 🏷️ Create release tag
-        if: steps.compare.outputs.needs_update == 'true'
-        run: |
-          LATEST_VERSION="${{ steps.latest-version.outputs.version }}"
-          TAG_NAME="v$LATEST_VERSION"
-          
-          # Check if tag already exists
-          if git tag -l | grep -q "^$TAG_NAME$"; then
-            echo "ℹ️ Tag $TAG_NAME already exists, skipping tag creation"
-          else
-            git tag -a "$TAG_NAME" -m "Release based on Home Assistant $LATEST_VERSION"
-            git push origin "$TAG_NAME"
-            echo "✅ Created and pushed tag: $TAG_NAME"
-          fi
-
-      - name: 📢 Create GitHub issue for manual review
+      - name: 📋 Create Pull Request
         if: steps.compare.outputs.needs_update == 'true'
         uses: actions/github-script@v7
         with:
           script: |
-            const title = `🔄 Home Assistant Updated to ${{ steps.latest-version.outputs.version }}`;
+            const title = `🔄 Update Home Assistant to ${{ steps.latest-version.outputs.version }}`;
             const body = `${{ steps.changes.outputs.summary }}
             
-            ## 🔍 Next Steps
-            - [ ] Review the automated changes
-            - [ ] Test the new image build
-            - [ ] Verify Telegram proxy functionality
-            - [ ] Update any dependent documentation
+            ## 🧪 Automated Testing Results
+            - ✅ Docker build test passed
+            - ✅ Container smoke test passed
+            - ✅ Image creation successful
             
-            **Commit**: ${{ steps.commit.outputs.commit_sha }}
+            ## 🔍 Review Checklist
+            - [ ] Review the automated changes
+            - [ ] Verify Telegram proxy functionality still works
+            - [ ] Check for any breaking changes in Home Assistant release notes
+            - [ ] Update any dependent documentation if needed
+            
+            ## 📚 Home Assistant Release Notes
+            For detailed release notes, see: https://github.com/home-assistant/core/releases/tag/${{ steps.latest-version.outputs.version }}
+            
+            **Branch**: \`${{ steps.branch.outputs.branch_name }}\`  
+            **Commit**: ${{ steps.commit.outputs.commit_sha }}  
             **Triggered by**: Automated version check workflow`;
             
-            github.rest.issues.create({
+            const { data: pr } = await github.rest.pulls.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: title,
-              body: body,
-              labels: ['automated-update', 'homeassistant-version']
+              head: '${{ steps.branch.outputs.branch_name }}',
+              base: 'main',
+              body: body
             });
+            
+            // Add labels to the PR
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['automated-update', 'homeassistant-version', 'ready-for-review']
+            });
+            
+            console.log(`Created Pull Request #${pr.number}: ${pr.html_url}`);
 
       - name: 📊 Job Summary
         if: always()
@@ -261,28 +297,12 @@ jobs:
             echo "### ✅ Changes Applied" >> $GITHUB_STEP_SUMMARY
             echo "- Updated Dockerfile base image" >> $GITHUB_STEP_SUMMARY
             echo "- Updated README badges" >> $GITHUB_STEP_SUMMARY
-            echo "- Created commit and pushed changes" >> $GITHUB_STEP_SUMMARY
-            echo "- Created release tag" >> $GITHUB_STEP_SUMMARY
-            echo "- Created tracking issue" >> $GITHUB_STEP_SUMMARY
+            echo "- Verified build compatibility and smoke tests" >> $GITHUB_STEP_SUMMARY
+            echo "- Created update branch: \`${{ steps.branch.outputs.branch_name }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Created Pull Request for review" >> $GITHUB_STEP_SUMMARY
           else
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### ℹ️ No Updates Required" >> $GITHUB_STEP_SUMMARY
             echo "The current version is already up to date." >> $GITHUB_STEP_SUMMARY
           fi
 
-  # Trigger CI build after successful update
-  trigger-ci:
-    needs: check-and-update
-    if: needs.check-and-update.outputs.needs_update == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: 🚀 Trigger CI Build
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'ci.yml',
-              ref: 'main'
-            });
