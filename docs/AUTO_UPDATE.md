@@ -136,11 +136,33 @@ When an automated update occurs, review:
 ### Common Issues
 
 #### Workflow Fails to Fetch Latest Version
-**Symptoms:** API request to Docker Hub fails
+**Symptoms:** 
+- API request to Docker Hub fails
+- "Failed to fetch latest Home Assistant version" error
+- Empty or null version returned
+- "Invalid version format detected" error
+
+**Causes:**
+- Docker Hub API is down or rate limiting requests
+- Network connectivity issues
+- Changes in Docker Hub API response format
+- No valid semantic version tags found
+- Invalid version format in response
+
 **Solutions:**
-- Check Docker Hub API status
-- Verify network connectivity
-- Review API rate limits
+- Check Docker Hub API status at https://status.docker.com/
+- Verify network connectivity in GitHub Actions environment
+- Review API rate limits (Docker Hub allows 100 requests per 6 hours for anonymous users)
+- Check if Home Assistant changed their tagging format
+- Manual trigger with force update if needed
+- Wait and retry if it's a temporary API issue
+
+**Enhanced Error Handling:**
+The workflow now includes comprehensive validation:
+- ✅ Checks for empty or null responses
+- ✅ Validates version format (YYYY.MM.DD)
+- ✅ Provides detailed error messages
+- ✅ Suggests specific troubleshooting steps
 
 #### Build Test Fails
 **Symptoms:** Docker build fails with new version
@@ -157,11 +179,23 @@ When an automated update occurs, review:
 - Review branch protection rules
 
 #### Version Detection Issues
-**Symptoms:** Wrong version detected or parsed
+**Symptoms:** 
+- Wrong version detected or parsed
+- "Failed to extract current version from Dockerfile" error
+- "Invalid version format detected" error
+
 **Solutions:**
 - Verify Docker Hub API response format
-- Check version regex pattern
+- Check version regex pattern in workflow
 - Review jq query syntax
+- Ensure Dockerfile has valid FROM line format
+- Verify Home Assistant hasn't changed their versioning scheme
+
+**Dockerfile Validation:**
+The workflow validates both current and latest versions:
+- ✅ Ensures Dockerfile contains valid FROM line
+- ✅ Validates extracted version format
+- ✅ Provides clear error messages for missing or invalid versions
 
 ### Debug Steps
 

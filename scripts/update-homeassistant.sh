@@ -71,6 +71,7 @@ print_status "🔍 Checking Home Assistant versions..."
 CURRENT_VERSION=$(grep -oP 'FROM homeassistant/home-assistant:\K[^\s]+' "$DOCKERFILE")
 if [ -z "$CURRENT_VERSION" ]; then
     print_error "Could not extract current version from Dockerfile"
+    print_error "Please verify that Dockerfile contains a valid FROM line with homeassistant/home-assistant image"
     exit 1
 fi
 print_status "Current version: $CURRENT_VERSION"
@@ -81,8 +82,21 @@ LATEST_VERSION=$(curl -s "https://registry.hub.docker.com/v2/repositories/homeas
     jq -r '.results[] | select(.name | test("^[0-9]{4}\\.[0-9]+\\.[0-9]+$")) | .name' | \
     sort -V | tail -1)
 
-if [ -z "$LATEST_VERSION" ]; then
-    print_error "Could not fetch latest version from Docker Hub"
+# Validate that we got a valid version
+if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
+    print_error "Failed to fetch latest Home Assistant version from Docker Hub API"
+    echo "This could be due to:"
+    echo "  - Docker Hub API is down or rate limiting"
+    echo "  - Network connectivity issues"
+    echo "  - Changes in Docker Hub API response format"
+    echo "  - No valid semantic version tags found"
+    exit 1
+fi
+
+# Additional validation for version format
+if ! echo "$LATEST_VERSION" | grep -qE '^[0-9]{4}\.[0-9]+\.[0-9]+$'; then
+    print_error "Invalid version format detected: '$LATEST_VERSION'"
+    echo "Expected format: YYYY.MM.DD (e.g., 2025.4.1)"
     exit 1
 fi
 print_status "Latest version: $LATEST_VERSION"

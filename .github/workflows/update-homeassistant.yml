@@ -39,6 +39,14 @@ jobs:
         id: current-version
         run: |
           CURRENT_VERSION=$(grep -oP 'FROM homeassistant/home-assistant:\K[^\s]+' Dockerfile)
+          
+          # Validate that we extracted a valid version
+          if [ -z "$CURRENT_VERSION" ]; then
+            echo "❌ Failed to extract current Home Assistant version from Dockerfile"
+            echo "Please verify that Dockerfile contains a valid FROM line with homeassistant/home-assistant image"
+            exit 1
+          fi
+          
           echo "Current version: $CURRENT_VERSION"
           echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
@@ -46,9 +54,27 @@ jobs:
         id: latest-version
         run: |
           # Get the latest tag from Docker Hub API
-          LATEST_VERSION=$(curl -s "https://registry.hub.docker.com/v2/repositories/homeassistant/home-assistant/tags?page_size=100&ordering=-last_updated" | \
+          LATEST_VERSION=$(curl -s "https://registry.hub.docker.com/v2/repositories/homeassistant/home-assistant/tags?page_size=100&ordering=last_updated" | \
             jq -r '.results[] | select(.name | test("^[0-9]{4}\\.[0-9]+\\.[0-9]+$")) | .name' | \
             sort -V | tail -1)
+          
+          # Validate that we got a valid version
+          if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
+            echo "❌ Failed to fetch latest Home Assistant version from Docker Hub API"
+            echo "This could be due to:"
+            echo "  - Docker Hub API is down or rate limiting"
+            echo "  - Network connectivity issues"
+            echo "  - Changes in Docker Hub API response format"
+            echo "  - No valid semantic version tags found"
+            exit 1
+          fi
+          
+          # Additional validation for version format
+          if ! echo "$LATEST_VERSION" | grep -qE '^[0-9]{4}\.[0-9]+\.[0-9]+$'; then
+            echo "❌ Invalid version format detected: '$LATEST_VERSION'"
+            echo "Expected format: YYYY.MM.DD (e.g., 2025.4.1)"
+            exit 1
+          fi
           
           echo "Latest version: $LATEST_VERSION"
           echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT

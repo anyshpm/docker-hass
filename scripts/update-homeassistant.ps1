@@ -69,11 +69,26 @@ try {
         Select-Object -ExpandProperty name
 } catch {
     Write-Error "Could not fetch latest version from Docker Hub: $($_.Exception.Message)"
+    Write-Host "This could be due to:"
+    Write-Host "  - Docker Hub API is down or rate limiting"
+    Write-Host "  - Network connectivity issues"
+    Write-Host "  - Changes in Docker Hub API response format"
     exit 1
 }
 
-if (-not $LatestVersion) {
-    Write-Error "Could not determine latest version"
+if (-not $LatestVersion -or $LatestVersion -eq "null" -or [string]::IsNullOrWhiteSpace($LatestVersion)) {
+    Write-Error "Failed to determine latest Home Assistant version"
+    Write-Host "Possible causes:"
+    Write-Host "  - No valid semantic version tags found in Docker Hub response"
+    Write-Host "  - API response format changed"
+    Write-Host "  - Network or API issues"
+    exit 1
+}
+
+# Additional validation for version format
+if ($LatestVersion -notmatch '^[0-9]{4}\.[0-9]+\.[0-9]+$') {
+    Write-Error "Invalid version format detected: '$LatestVersion'"
+    Write-Host "Expected format: YYYY.MM.DD (e.g., 2025.4.1)"
     exit 1
 }
 Write-Status "Latest version: $LatestVersion"
