@@ -25,6 +25,9 @@ on:
 env:
   REGISTRY: docker.io
   IMAGE_NAME: homeassistant/home-assistant
+  # Enable debug logging
+  ACTIONS_STEP_DEBUG: true
+  ACTIONS_RUNNER_DEBUG: true
 
 jobs:
   check-and-update:
@@ -206,12 +209,23 @@ jobs:
         if: steps.compare.outputs.needs_update == 'true'
         uses: actions/github-script@v7
         with:
+          debug: true
           script: |
+            console.log('Starting PR creation script...');
+            
+            // Extract variables with debug logging
             const latestVersion = '${{ steps.latest-version.outputs.version }}';
             const currentVersion = '${{ steps.current-version.outputs.version }}';
-            const changesSummary = `${{ steps.changes.outputs.summary }}`;
+            const changesSummary = String(`${{ steps.changes.outputs.summary }}`);
+            
+            console.log('Variables extracted:');
+            console.log('- Latest version:', latestVersion);
+            console.log('- Current version:', currentVersion);
+            console.log('- Changes summary length:', changesSummary.length);
             
             const title = `🔄 Update Home Assistant to ${latestVersion}`;
+            console.log('PR title:', title);
+            
             const body = `${changesSummary}
             
             ## 🧪 Automated Testing Results
@@ -257,24 +271,36 @@ jobs:
             
             **Triggered by**: Automated version check workflow`;
             
-            const { data: pr } = await github.rest.pulls.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: title,
-              head: 'main',
-              base: 'main',
-              body: body
-            });
+            console.log('PR body length:', body.length);
             
-            // Add labels to the PR
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: pr.number,
-              labels: ['automated-update', 'homeassistant-version', 'manual-action-required']
-            });
-            
-            console.log(`Created Pull Request #${pr.number}: ${pr.html_url}`);
+            try {
+              console.log('Creating Pull Request...');
+              const { data: pr } = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                head: 'main',
+                base: 'main',
+                body: body
+              });
+              
+              console.log('PR created successfully:', pr.number);
+              
+              // Add labels to the PR
+              console.log('Adding labels to PR...');
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ['automated-update', 'homeassistant-version', 'manual-action-required']
+              });
+              
+              console.log(`Created Pull Request #${pr.number}: ${pr.html_url}`);
+            } catch (error) {
+              console.error('Error creating PR:', error);
+              console.error('Error details:', JSON.stringify(error, null, 2));
+              throw error;
+            }
 
       - name: 📊 Job Summary
         if: always()
