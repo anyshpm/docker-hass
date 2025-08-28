@@ -25,9 +25,6 @@ on:
 env:
   REGISTRY: docker.io
   IMAGE_NAME: homeassistant/home-assistant
-  # Enable debug logging
-  ACTIONS_STEP_DEBUG: true
-  ACTIONS_RUNNER_DEBUG: true
 
 jobs:
   check-and-update:
@@ -209,98 +206,76 @@ jobs:
         if: steps.compare.outputs.needs_update == 'true'
         uses: actions/github-script@v7
         with:
-          debug: true
           script: |
-            console.log('Starting PR creation script...');
-            
-            // Extract variables with debug logging
             const latestVersion = '${{ steps.latest-version.outputs.version }}';
             const currentVersion = '${{ steps.current-version.outputs.version }}';
-            const changesSummary = String(`${{ steps.changes.outputs.summary }}`);
-            
-            console.log('Variables extracted:');
-            console.log('- Latest version:', latestVersion);
-            console.log('- Current version:', currentVersion);
-            console.log('- Changes summary length:', changesSummary.length);
+            const changesSummary = `${{ steps.changes.outputs.summary }}`;
             
             const title = `🔄 Update Home Assistant to ${latestVersion}`;
-            console.log('PR title:', title);
+            const body = '';
+            //const body = `${changesSummary}
+            //
+            //## 🧪 Automated Testing Results
+            //- ✅ Docker build test passed
+            //- ✅ Container smoke test passed
+            //- ✅ Image creation successful
+            //
+            //## 📋 Manual Steps Required
+            //**⚠️ This is an automated detection only. To apply these changes:**
+            //
+            //1. **Download the updated files**:
+            //   - Updated Dockerfile with version ${latestVersion}
+            //   - Updated README.md with new version badges
+            //
+            //2. **Create a new branch manually**:
+            //   \`\`\`bash
+            //   git checkout -b update-homeassistant-${latestVersion}
+            //   \`\`\`
+            //
+            //3. **Apply the changes and commit**:
+            //   \`\`\`bash
+            //   # Update Dockerfile FROM line to:
+            //   # FROM homeassistant/home-assistant:${latestVersion}
+            //   
+            //   # Update README.md version badge to:
+            //   # Home%20Assistant-${latestVersion}-blue
+            //   
+            //   git add Dockerfile README.md
+            //   git commit -m "🔄 Update Home Assistant to version ${latestVersion}"
+            //   git push origin update-homeassistant-${latestVersion}
+            //   \`\`\`
+            //
+            //4. **Create Pull Request manually** or merge this automated detection PR
+            //
+            //## 🔍 Review Checklist
+            //- [ ] Review the automated changes above
+            //- [ ] Verify Telegram proxy functionality still works
+            //- [ ] Check for any breaking changes in Home Assistant release notes
+            //- [ ] Update any dependent documentation if needed
+            //
+            //## 📚 Home Assistant Release Notes
+            //For detailed release notes, see: https://github.com/home-assistant/core/releases/tag/${latestVersion}
+            //
+            //**Triggered by**: Automated version check workflow`;
             
-            const body = `${changesSummary}
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              head: 'main',
+              base: 'main',
+              body: body
+            });
             
-            ## 🧪 Automated Testing Results
-            - ✅ Docker build test passed
-            - ✅ Container smoke test passed
-            - ✅ Image creation successful
+            // Add labels to the PR
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['automated-update', 'homeassistant-version', 'manual-action-required']
+            });
             
-            ## 📋 Manual Steps Required
-            **⚠️ This is an automated detection only. To apply these changes:**
-            
-            1. **Download the updated files**:
-               - Updated Dockerfile with version ${latestVersion}
-               - Updated README.md with new version badges
-            
-            2. **Create a new branch manually**:
-               \`\`\`bash
-               git checkout -b update-homeassistant-${latestVersion}
-               \`\`\`
-            
-            3. **Apply the changes and commit**:
-               \`\`\`bash
-               # Update Dockerfile FROM line to:
-               # FROM homeassistant/home-assistant:${latestVersion}
-               
-               # Update README.md version badge to:
-               # Home%20Assistant-${latestVersion}-blue
-               
-               git add Dockerfile README.md
-               git commit -m "🔄 Update Home Assistant to version ${latestVersion}"
-               git push origin update-homeassistant-${latestVersion}
-               \`\`\`
-            
-            4. **Create Pull Request manually** or merge this automated detection PR
-            
-            ## 🔍 Review Checklist
-            - [ ] Review the automated changes above
-            - [ ] Verify Telegram proxy functionality still works
-            - [ ] Check for any breaking changes in Home Assistant release notes
-            - [ ] Update any dependent documentation if needed
-            
-            ## 📚 Home Assistant Release Notes
-            For detailed release notes, see: https://github.com/home-assistant/core/releases/tag/${latestVersion}
-            
-            **Triggered by**: Automated version check workflow`;
-            
-            console.log('PR body length:', body.length);
-            
-            try {
-              console.log('Creating Pull Request...');
-              const { data: pr } = await github.rest.pulls.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: title,
-                head: 'main',
-                base: 'main',
-                body: body
-              });
-              
-              console.log('PR created successfully:', pr.number);
-              
-              // Add labels to the PR
-              console.log('Adding labels to PR...');
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                labels: ['automated-update', 'homeassistant-version', 'manual-action-required']
-              });
-              
-              console.log(`Created Pull Request #${pr.number}: ${pr.html_url}`);
-            } catch (error) {
-              console.error('Error creating PR:', error);
-              console.error('Error details:', JSON.stringify(error, null, 2));
-              throw error;
-            }
+            console.log(`Created Pull Request #${pr.number}: ${pr.html_url}`);
 
       - name: 📊 Job Summary
         if: always()
