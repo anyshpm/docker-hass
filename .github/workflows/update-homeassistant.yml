@@ -210,7 +210,7 @@ jobs:
             const latestVersion = '${{ steps.latest-version.outputs.version }}';
             const currentVersion = '${{ steps.current-version.outputs.version }}';
             const changesSummary = '';
-            //const changesSummary = `${{ steps.changes.outputs.summary }}`;
+            //const changesSummary = ${{ steps.changes.outputs.summary }};
             
             const title = `🔄 Update Home Assistant to ${latestVersion}`;
             const body = '';
