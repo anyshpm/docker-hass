@@ -10,6 +10,8 @@ name: Update Home Assistant Version
 # ${{ secrets.GITHUB_TOKEN }} with ${{ secrets.PAT_TOKEN }} in the checkout step
 
 on:
+  push:
+    branches: [ "*" ]
   schedule:
     # Run daily at 06:00 UTC to check for new versions
     - cron: '0 6 * * *'
@@ -263,8 +265,8 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: title,
-              head: 'main',
-              base: 'main',
+              head: context.ref,
+              base: 'master',
               body: body
             });
             
