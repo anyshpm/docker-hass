@@ -207,8 +207,12 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const title = `🔄 Update Home Assistant to ${{ steps.latest-version.outputs.version }}`;
-            const body = `${{ steps.changes.outputs.summary }}
+            const latestVersion = '${{ steps.latest-version.outputs.version }}';
+            const currentVersion = '${{ steps.current-version.outputs.version }}';
+            const changesSummary = `${{ steps.changes.outputs.summary }}`;
+            
+            const title = `🔄 Update Home Assistant to ${latestVersion}`;
+            const body = `${changesSummary}
             
             ## 🧪 Automated Testing Results
             - ✅ Docker build test passed
@@ -219,25 +223,25 @@ jobs:
             **⚠️ This is an automated detection only. To apply these changes:**
             
             1. **Download the updated files**:
-               - Updated Dockerfile with version ${{ steps.latest-version.outputs.version }}
+               - Updated Dockerfile with version ${latestVersion}
                - Updated README.md with new version badges
             
             2. **Create a new branch manually**:
                \`\`\`bash
-               git checkout -b update-homeassistant-${{ steps.latest-version.outputs.version }}
+               git checkout -b update-homeassistant-${latestVersion}
                \`\`\`
             
             3. **Apply the changes and commit**:
                \`\`\`bash
                # Update Dockerfile FROM line to:
-               FROM homeassistant/home-assistant:${{ steps.latest-version.outputs.version }}
+               # FROM homeassistant/home-assistant:${latestVersion}
                
                # Update README.md version badge to:
-               # Home%20Assistant-${{ steps.latest-version.outputs.version }}-blue
+               # Home%20Assistant-${latestVersion}-blue
                
                git add Dockerfile README.md
-               git commit -m "🔄 Update Home Assistant to version ${{ steps.latest-version.outputs.version }}"
-               git push origin update-homeassistant-${{ steps.latest-version.outputs.version }}
+               git commit -m "🔄 Update Home Assistant to version ${latestVersion}"
+               git push origin update-homeassistant-${latestVersion}
                \`\`\`
             
             4. **Create Pull Request manually** or merge this automated detection PR
@@ -249,7 +253,7 @@ jobs:
             - [ ] Update any dependent documentation if needed
             
             ## 📚 Home Assistant Release Notes
-            For detailed release notes, see: https://github.com/home-assistant/core/releases/tag/${{ steps.latest-version.outputs.version }}
+            For detailed release notes, see: https://github.com/home-assistant/core/releases/tag/${latestVersion}
             
             **Triggered by**: Automated version check workflow`;
             
