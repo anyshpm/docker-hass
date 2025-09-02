@@ -1,32 +1,16 @@
 name: Update Home Assistant Version
 
-# Note: If you encounter permission errors, you may need to:
-# 1. Go to repository Settings > Actions > General
-# 2. Set "Workflow permissions" to "Read and write permissions"
-# 3. Enable "Allow GitHub Actions to create and approve pull requests"
-# 
-# Alternative: Create a Personal Access Token (PAT) with repo permissions
-# and add it as a repository secret named 'PAT_TOKEN', then replace 
-# ${{ secrets.GITHUB_TOKEN }} with ${{ secrets.PAT_TOKEN }} in the checkout step
-
 on:
   push:
     branches: [ "*" ]
   schedule:
-    # Run daily at 06:00 UTC to check for new versions
-    - cron: '0 6 * * *'
+    - cron: '0 6 * * *'  # Daily at 06:00 UTC
   workflow_dispatch:
-    # Allow manual triggering
     inputs:
       force_update:
         description: 'Force update even if version is the same'
-        required: false
-        default: false
         type: boolean
-
-env:
-  REGISTRY: docker.io
-  IMAGE_NAME: homeassistant/home-assistant
+        default: false
 
 jobs:
   check-and-update:
@@ -47,281 +31,123 @@ jobs:
       - name: 🐳 Set up Docker
         uses: docker/setup-buildx-action@v3
 
-      - name: 📋 Get current Home Assistant version from Dockerfile
-        id: current-version
+      - name: 📋 Get versions
+        id: versions
         run: |
-          CURRENT_VERSION=$(grep -oP 'FROM homeassistant/home-assistant:\K[^\s]+' Dockerfile)
-          
-          # Validate that we extracted a valid version
-          if [ -z "$CURRENT_VERSION" ]; then
-            echo "❌ Failed to extract current Home Assistant version from Dockerfile"
-            echo "Please verify that Dockerfile contains a valid FROM line with homeassistant/home-assistant image"
-            exit 1
-          fi
-          
-          echo "Current version: $CURRENT_VERSION"
-          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-
-      - name: 🔍 Get latest Home Assistant version
-        id: latest-version
-        run: |
-          # Get the latest tag from Docker Hub API
-          LATEST_VERSION=$(curl -s "https://registry.hub.docker.com/v2/repositories/homeassistant/home-assistant/tags?page_size=100&ordering=last_updated" | \
+          CURRENT=$(grep -oP 'FROM homeassistant/home-assistant:\K[^\s]+' Dockerfile)
+          LATEST=$(curl -s "https://registry.hub.docker.com/v2/repositories/homeassistant/home-assistant/tags?page_size=100&ordering=last_updated" | \
             jq -r '.results[] | select(.name | test("^[0-9]{4}\\.[0-9]+\\.[0-9]+$")) | .name' | \
             sort -V | tail -1)
           
-          # Validate that we got a valid version
-          if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" = "null" ]; then
-            echo "❌ Failed to fetch latest Home Assistant version from Docker Hub API"
-            echo "This could be due to:"
-            echo "  - Docker Hub API is down or rate limiting"
-            echo "  - Network connectivity issues"
-            echo "  - Changes in Docker Hub API response format"
-            echo "  - No valid semantic version tags found"
-            exit 1
-          fi
+          # Validate versions
+          [[ -z "$CURRENT" || -z "$LATEST" || "$LATEST" == "null" ]] && exit 1
           
-          # Additional validation for version format
-          if ! echo "$LATEST_VERSION" | grep -qE '^[0-9]{4}\.[0-9]+\.[0-9]+$'; then
-            echo "❌ Invalid version format detected: '$LATEST_VERSION'"
-            echo "Expected format: YYYY.MM.DD (e.g., 2025.4.1)"
-            exit 1
-          fi
-          
-          echo "Latest version: $LATEST_VERSION"
-          echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
-          
-          # Also get the image digest for verification
-          DIGEST=$(curl -s "https://registry.hub.docker.com/v2/repositories/homeassistant/home-assistant/tags/$LATEST_VERSION" | \
-            jq -r '.digest // "unknown"')
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          echo "Current: $CURRENT, Latest: $LATEST"
 
-      - name: 🔄 Compare versions
+
+
+      - name: 🔄 Check if update needed
         id: compare
         run: |
-          CURRENT="${{ steps.current-version.outputs.version }}"
-          LATEST="${{ steps.latest-version.outputs.version }}"
-          FORCE_UPDATE="${{ github.event.inputs.force_update }}"
+          CURRENT="${{ steps.versions.outputs.current }}"
+          LATEST="${{ steps.versions.outputs.latest }}"
           
-          echo "Current: $CURRENT"
-          echo "Latest: $LATEST"
-          echo "Force update: $FORCE_UPDATE"
-          
-          if [ "$CURRENT" != "$LATEST" ] || [ "$FORCE_UPDATE" = "true" ]; then
+          if [ "$CURRENT" != "$LATEST" ] || [ "${{ github.event.inputs.force_update }}" = "true" ]; then
             echo "needs_update=true" >> $GITHUB_OUTPUT
             echo "✅ Update needed: $CURRENT -> $LATEST"
           else
             echo "needs_update=false" >> $GITHUB_OUTPUT
-            echo "ℹ️ No update needed. Current version $CURRENT is up to date."
+            echo "ℹ️ Already up to date: $CURRENT"
           fi
 
-      - name: 🛠️ Update Dockerfile
+      - name: 🛠️ Update files
         if: steps.compare.outputs.needs_update == 'true'
         run: |
-          CURRENT_VERSION="${{ steps.current-version.outputs.version }}"
-          LATEST_VERSION="${{ steps.latest-version.outputs.version }}"
+          CURRENT="${{ steps.versions.outputs.current }}"
+          LATEST="${{ steps.versions.outputs.latest }}"
           
-          # Update the FROM line in Dockerfile
-          sed -i "s/FROM homeassistant\/home-assistant:$CURRENT_VERSION/FROM homeassistant\/home-assistant:$LATEST_VERSION/g" Dockerfile
+          # Update Dockerfile
+          sed -i "s/FROM homeassistant\/home-assistant:$CURRENT/FROM homeassistant\/home-assistant:$LATEST/g" Dockerfile
           
-          # Verify the change was made
-          if grep -q "FROM homeassistant/home-assistant:$LATEST_VERSION" Dockerfile; then
-            echo "✅ Dockerfile updated successfully"
-            echo "updated=true" >> $GITHUB_OUTPUT
-          else
-            echo "❌ Failed to update Dockerfile"
-            exit 1
-          fi
+          # Update README badges
+          sed -i "s/Home%20Assistant-[0-9]\{4\}\.[0-9]\+\.[0-9]\+-blue/Home%20Assistant-${LATEST}-blue/g" README.md
+          
+          echo "✅ Files updated: $CURRENT -> $LATEST"
 
-      - name: 🧪 Test build with new version
+      - name: 🧪 Test build
         if: steps.compare.outputs.needs_update == 'true'
         run: |
-          echo "🔨 Testing Docker build with new version..."
-          docker build --no-cache -t test-build:latest .
-          echo "✅ Build test successful"
-          
-          # Test that the image can start (basic smoke test)
-          echo "🔍 Running smoke test..."
-          docker run --rm -d --name test-container test-build:latest || true
+          docker build --no-cache -t test-build .
+          docker run --rm -d --name test-container test-build || true
           sleep 10
           
-          # Check if container is running or has exited successfully
-          if docker ps -a --filter "name=test-container" --format "{{.Status}}" | grep -q "Exited (0)"; then
-            echo "✅ Container smoke test passed - exited successfully"
-          elif docker ps --filter "name=test-container" --format "{{.Names}}" | grep -q "test-container"; then
-            echo "✅ Container smoke test passed - still running"
-            docker stop test-container
+          if docker ps -a --filter "name=test-container" --format "{{.Status}}" | grep -qE "(Exited \(0\)|Up)"; then
+            echo "✅ Build and smoke test passed"
           else
-            echo "❌ Container smoke test failed"
-            docker logs test-container || true
+            echo "❌ Test failed"
+            docker logs test-container 2>/dev/null || true
             exit 1
           fi
           
-          # Clean up
           docker rm -f test-container 2>/dev/null || true
-          echo "✅ All tests passed"
 
-      - name: 📝 Update README badges
-        if: steps.compare.outputs.needs_update == 'true'
-        run: |
-          LATEST_VERSION="${{ steps.latest-version.outputs.version }}"
-          
-          # Update Home Assistant version badge in README
-          if [ -f README.md ]; then
-            sed -i "s/Home%20Assistant-[0-9]\{4\}\.[0-9]\+\.[0-9]\+-blue/Home%20Assistant-${LATEST_VERSION}-blue/g" README.md
-            echo "✅ README badges updated"
-          fi
 
-      - name: 🌿 Create feature branch
-        if: steps.compare.outputs.needs_update == 'true'
-        id: create-branch
-        run: |
-          LATEST_VERSION="${{ steps.latest-version.outputs.version }}"
-          BRANCH_NAME="update-homeassistant-${LATEST_VERSION}"
-          
-          # Configure git user
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
-          # Create and checkout new branch
-          git checkout -b "$BRANCH_NAME"
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
-      - name: 💾 Commit changes
+      - name: 🚀 Create branch and commit
         if: steps.compare.outputs.needs_update == 'true'
         id: commit
         run: |
-          LATEST_VERSION="${{ steps.latest-version.outputs.version }}"
+          LATEST="${{ steps.versions.outputs.latest }}"
+          BRANCH="update-homeassistant-${LATEST}"
           
-          # Add all changed files
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git checkout -b "$BRANCH"
           git add Dockerfile README.md
           
-          # Check if there are changes to commit
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-            echo "has_changes=false" >> $GITHUB_OUTPUT
+          if ! git diff --staged --quiet; then
+            git commit -m "🔄 Update Home Assistant to $LATEST"
+            git push origin "$BRANCH"
+            echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+            echo "✅ Changes committed and pushed"
           else
-            # Commit the changes
-            git commit -m "🔄 Update Home Assistant to version $LATEST_VERSION
-            
-            - Updated Dockerfile to use homeassistant/home-assistant:$LATEST_VERSION
-            - Updated README badges to reflect new version
-            - Verified build compatibility with new version"
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "✅ Changes committed successfully"
+            echo "❌ No changes to commit"
+            exit 1
           fi
 
-      - name: 🚀 Push feature branch
-        if: steps.compare.outputs.needs_update == 'true' && steps.commit.outputs.has_changes == 'true'
-        run: |
-          BRANCH_NAME="update-homeassistant-${{ steps.latest-version.outputs.version }}"
-          git push origin "$BRANCH_NAME"
-          echo "✅ Feature branch pushed successfully"
 
-      - name: 📊 Generate change summary
-        if: steps.compare.outputs.needs_update == 'true'
-        id: changes
-        run: |
-          CURRENT_VERSION="${{ steps.current-version.outputs.version }}"
-          LATEST_VERSION="${{ steps.latest-version.outputs.version }}"
-          
-          cat > CHANGES.md << EOF
-          # Home Assistant Version Update
-          
-          ## 📋 Summary
-          - **Previous version**: \`$CURRENT_VERSION\`
-          - **New version**: \`$LATEST_VERSION\`
-          - **Update date**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-          
-          ## 🔄 Changes Made
-          - Updated \`Dockerfile\` to use Home Assistant version \`$LATEST_VERSION\`
-          - Updated README badges to reflect new version
-          - Verified build compatibility with new version
-          
-          ## 🧪 Testing
-          - ✅ Docker build test passed
-          - ✅ Container smoke test passed
-          - ✅ Image creation successful
-          
-          ## 🔍 Review Checklist
-          - [ ] Review the automated changes above
-          - [ ] Verify Telegram proxy functionality still works
-          - [ ] Check for any breaking changes in Home Assistant release notes
-          - [ ] Update any dependent documentation if needed
-          
-          ## 📚 Release Notes
-          For detailed release notes, see: https://github.com/home-assistant/core/releases/tag/$LATEST_VERSION
-          
-          **Triggered by**: Automated version check workflow
-          EOF
-          
-          echo "summary<<EOF" >> $GITHUB_OUTPUT
-          cat CHANGES.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: 📋 Create Pull Request
-        if: steps.compare.outputs.needs_update == 'true' && steps.commit.outputs.has_changes == 'true'
-        id: create-pr
+        if: steps.compare.outputs.needs_update == 'true' && steps.commit.outputs.branch
         uses: actions/github-script@v7
         with:
           script: |
-            const latestVersion = '${{ steps.latest-version.outputs.version }}';
-            const currentVersion = '${{ steps.current-version.outputs.version }}';
-            const branchName = `update-homeassistant-${latestVersion}`;
+            const current = '${{ steps.versions.outputs.current }}';
+            const latest = '${{ steps.versions.outputs.latest }}';
+            const branch = '${{ steps.commit.outputs.branch }}';
             
-            const title = `🔄 Update Home Assistant to ${latestVersion}`;
-            const body = ${{ steps.changes.outputs.summary }}
+            const title = `🔄 Update Home Assistant to ${latest}`;
+            const body = `## 📋 Summary
+            - **Previous**: \`${current}\`
+            - **New**: \`${latest}\`
+            - **Date**: ${new Date().toUTCString()}
             
-            ## 🧪 Automated Testing Results
-            - ✅ Docker build test passed
+            ## 🧪 Tests Passed
+            - ✅ Docker build successful
             - ✅ Container smoke test passed
-            - ✅ Image creation successful
             
-            ## 🤖 Automated Changes Applied
-            This pull request was created automatically by the version update workflow. All changes have been tested and are ready for review.
+            ## 📚 Release Notes
+            https://github.com/home-assistant/core/releases/tag/${latest}`;
             
-            ### Files Modified:
-            - \`Dockerfile\`: Updated base image to \`homeassistant/home-assistant:${latestVersion}\`
-            - \`README.md\`: Updated version badges to reflect new version
-            
-            **Triggered by**: Automated version check workflow`;
-            
-            try {
-              const { data: pr } = await github.rest.pulls.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: title,
-                head: branchName,
-                base: 'main',
-                body: body
-              });
-              
-              // Add labels to the PR
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                labels: ['automated-update', 'homeassistant-version']
-              });
-              
-              console.log(`✅ Created Pull Request #${pr.number}: ${pr.html_url}`);
-              
-              // Set output for use in job summary
-              core.setOutput('pr_number', pr.number);
-              core.setOutput('pr_url', pr.html_url);
-            } catch (error) {
-              console.error('❌ Failed to create Pull Request:', error);
-              
-              // Try with 'master' as base branch if 'main' fails
-              if (error.message.includes('base')) {
-                console.log('🔄 Retrying with master branch...');
+            const bases = ['main', 'master'];
+            for (const base of bases) {
+              try {
                 const { data: pr } = await github.rest.pulls.create({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  title: title,
-                  head: branchName,
-                  base: 'master',
-                  body: body
+                  title, head: branch, base, body
                 });
                 
                 await github.rest.issues.addLabels({
@@ -331,44 +157,18 @@ jobs:
                   labels: ['automated-update', 'homeassistant-version']
                 });
                 
-                console.log(`✅ Created Pull Request #${pr.number}: ${pr.html_url}`);
-                core.setOutput('pr_number', pr.number);
-                core.setOutput('pr_url', pr.html_url);
-              } else {
-                throw error;
+                console.log(`✅ Created PR #${pr.number}: ${pr.html_url}`);
+                return;
+              } catch (error) {
+                if (base === bases[bases.length - 1]) throw error;
               }
             }
 
-      - name: 📊 Job Summary
+      - name: 📊 Summary
         if: always()
         run: |
-          echo "## 🔄 Home Assistant Version Update Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Current Version | \`${{ steps.current-version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Latest Version | \`${{ steps.latest-version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Update Needed | ${{ steps.compare.outputs.needs_update }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Workflow Trigger | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Timestamp | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "${{ steps.compare.outputs.needs_update }}" = "true" ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            if [ "${{ steps.commit.outputs.has_changes }}" = "true" ]; then
-              echo "### ✅ Update Complete" >> $GITHUB_STEP_SUMMARY
-              echo "- Detected new Home Assistant version: \`${{ steps.latest-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-              echo "- Updated files and created feature branch" >> $GITHUB_STEP_SUMMARY
-              echo "- Verified build compatibility and smoke tests" >> $GITHUB_STEP_SUMMARY
-              echo "- Created Pull Request for review and merge" >> $GITHUB_STEP_SUMMARY
-              echo "- **PR URL**: https://github.com/${{ github.repository }}/pull/${{ steps.create-pr.outputs.pr_number }}" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "### ⚠️ No Changes Detected" >> $GITHUB_STEP_SUMMARY
-              echo "- Version update needed but no file changes detected" >> $GITHUB_STEP_SUMMARY
-              echo "- This might indicate an issue with the update process" >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### ℹ️ No Updates Required" >> $GITHUB_STEP_SUMMARY
-            echo "The current version is already up to date." >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "## 🔄 Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Current | Latest | Updated |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`${{ steps.versions.outputs.current }}\` | \`${{ steps.versions.outputs.latest }}\` | ${{ steps.compare.outputs.needs_update }} |" >> $GITHUB_STEP_SUMMARY
 
