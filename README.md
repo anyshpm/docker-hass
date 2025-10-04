@@ -1,7 +1,7 @@
 # 🏠 Home Assistant with Telegram Proxy Patch
 
 [![Docker Image](https://img.shields.io/badge/docker-anyshpm%2Fhomeassistant-blue?logo=docker)](https://hub.docker.com/r/anyshpm/homeassistant)
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.9.4-blue?logo=home-assistant)](https://www.home-assistant.io/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.10.1-blue?logo=home-assistant)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Maintainer](https://img.shields.io/badge/maintainer-Anyshpm%20Chen-orange)](mailto:anyshpm@anyshpm.com)
 
