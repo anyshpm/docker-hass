@@ -164,6 +164,32 @@ jobs:
               }
             }
 
+      - name: 📧 Send Email Notification
+        if: steps.compare.outputs.needs_update == 'true' && steps.commit.outputs.branch
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.EMAIL_SERVER }}
+          server_port: ${{ secrets.EMAIL_PORT }}
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "Home Assistant Update PR Created - ${{ steps.versions.outputs.latest }}"
+          body: |
+            Hello,
+            
+            An automated update PR has been created for Home Assistant version ${{ steps.versions.outputs.latest }}.
+            
+            Previous version: ${{ steps.versions.outputs.current }}
+            New version: ${{ steps.versions.outputs.latest }}
+            
+            Please review and merge the PR when possible.
+            
+            PR Link: https://github.com/${{ github.repository }}/pulls
+            Repository: https://github.com/${{ github.repository }}
+            
+            This is an automated message from the Home Assistant Docker image update workflow.
+          to: ${{ secrets.EMAIL_TO }}
+          from: GitHub Actions <${{ secrets.EMAIL_FROM }}>
+
       - name: 📊 Summary
         if: always()
         run: |

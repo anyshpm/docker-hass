@@ -102,6 +102,12 @@ Required secrets for the workflow:
 |--------|-------------|----------|
 | `DOCKERHUB_USERNAME` | Docker Hub username | Yes (for CI) |
 | `DOCKERHUB_TOKEN` | Docker Hub access token | Yes (for CI) |
+| `EMAIL_SERVER` | SMTP server address for notifications | Yes (for email) |
+| `EMAIL_PORT` | SMTP server port for notifications | Yes (for email) |
+| `EMAIL_USERNAME` | SMTP email username for notifications | Yes (for email) |
+| `EMAIL_PASSWORD` | SMTP email password for notifications | Yes (for email) |
+| `EMAIL_FROM` | Sender email address | Yes (for email) |
+| `EMAIL_TO` | Recipient email address | Yes (for email) |
 
 ### Workflow Inputs
 
@@ -120,6 +126,7 @@ Manual trigger supports:
 
 ### Notifications
 - 📧 GitHub issue created for each update
+- 📧 Email notification sent to repository owner when PR is created
 - 🏷️ Release tags created automatically
 - 📝 Detailed commit messages with changelog links
 

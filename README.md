@@ -123,6 +123,7 @@ When a new version is detected, the system:
 5. **Tags** the release with the Home Assistant version
 6. **Triggers** the CI build pipeline automatically
 7. **Creates** a GitHub issue for manual review
+8. **Sends** an email notification to the repository owner
 
 ### 🛠️ **Manual Control**
 ```bash
