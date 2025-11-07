@@ -1,13 +1,13 @@
---- _httpxrequest2.py	2024-04-08 12:06:26.170348528 +0800
-+++ _httpxrequest.py	2024-04-08 12:07:09.926388443 +0800
-@@ -140,6 +140,10 @@
-         proxy: Optional[Union[str, httpx.Proxy, httpx.URL]] = None,
+--- _httpxrequest.py	2025-11-06 03:29:25.000000000 +0800
++++ _httpxrequest.py	2025-11-07 11:06:07.406921288 +0800
+@@ -148,6 +148,10 @@
          media_write_timeout: Optional[float] = 20.0,
+         httpx_kwargs: Optional[dict[str, Any]] = None,
      ):
-+        if proxy_url is None and proxy is None:
++        if proxy is None:
 +            import os
 +            proxy = os.environ.get('TELEGRAM_HTTPS_PROXY') or os.environ.get('telegram_https_proxy')
 +
-         if proxy_url is not None and proxy is not None:
-             raise ValueError("The parameters `proxy_url` and `proxy` are mutually exclusive.")
- 
+         self._http_version = http_version
+         self._media_write_timeout = media_write_timeout
+         timeout = httpx.Timeout(
