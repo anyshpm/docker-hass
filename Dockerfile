@@ -1,4 +1,4 @@
-FROM homeassistant/home-assistant:2026.6.4
+FROM homeassistant/home-assistant:2026.7.1
 
 LABEL maintainer="Anyshpm Chen <anyshpm@anyshpm.com>" \
       org.opencontainers.image.description="Home Assistant with telegram patch"
