@@ -8,6 +8,7 @@ on:
   pull_request:
     #branches: [ "main" ]
     branches: [ "*" ]
+  workflow_dispatch:
 
 env:
   # Use docker.io for Docker Hub if empty
@@ -18,6 +19,9 @@ env:
 
 jobs:
   build:
+    if: |
+      !startsWith(github.ref, 'refs/heads/update-homeassistant-') &&
+      !startsWith(github.head_ref, 'update-homeassistant-')
 
     runs-on: ubuntu-latest
     permissions:

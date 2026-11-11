@@ -4,14 +4,17 @@ This document explains the automated system for keeping the Home Assistant base 
 
 ## 📋 Overview
 
-The project includes an automated workflow that:
+The project includes an end-to-end automated workflow that:
 - ✅ Checks daily for new Home Assistant releases
 - ✅ Updates the Dockerfile automatically when new versions are available
 - ✅ Updates documentation badges
-- ✅ Tests the build to ensure compatibility
-- ✅ Creates commits and tags automatically
-- ✅ Triggers CI builds for the new version
-- ✅ Creates tracking issues for manual review
+- ✅ Tests the build and runs container smoke tests to ensure compatibility
+- ✅ Creates commits and opens a Pull Request automatically
+- ✅ Automatically merges the PR upon test success and cleans up branches
+- ✅ Creates release tags and publishes GitHub Releases automatically
+- ✅ Builds and pushes multi-arch (`linux/amd64`, `linux/arm64`) Docker images to Docker Hub
+- ✅ Signs images with Cosign for supply chain integrity
+- ✅ Sends an end-to-end completion summary email notification (zero manual intervention)
 
 ## 🤖 Automated Workflow
 
@@ -26,16 +29,20 @@ The project includes an automated workflow that:
 1. **Version Detection**: Fetches the latest Home Assistant version from Docker Hub API
 2. **Comparison**: Compares with current version in Dockerfile
 3. **Update**: Updates Dockerfile and README badges if newer version found
-4. **Testing**: Performs a test build to verify compatibility
-5. **Commit**: Creates an automated commit with detailed message
-6. **Tagging**: Creates a release tag matching the Home Assistant version
-7. **Notification**: Creates a GitHub issue for manual review
-8. **CI Trigger**: Automatically triggers the CI build workflow
+4. **Testing**: Performs test build and container smoke test to verify compatibility
+5. **Commit**: Creates an automated branch and commit with detailed message
+6. **PR Creation & Auto-Merge**: Opens a Pull Request and automatically merges it into the main branch
+7. **Tagging & Release**: Creates a Git tag and publishes a GitHub Release
+8. **Multi-Arch Docker Build & Push**: Builds `linux/amd64` and `linux/arm64` images and pushes to Docker Hub
+9. **Image Signing**: Cryptographically signs the images using Cosign with GitHub OIDC
+10. **Summary Notification**: Sends a comprehensive completion summary email to the maintainer
 
 **Permissions Required:**
-- `contents: write` - To commit and push changes
-- `pull-requests: write` - To create review issues
-- `actions: write` - To trigger other workflows
+- `contents: write` - To commit changes, create tags and releases
+- `pull-requests: write` - To create and merge PRs
+- `issues: write` - To label PRs
+- `packages: write` - To publish container packages
+- `id-token: write` - For Sigstore/Cosign OIDC image signing
 
 ## 🛠️ Manual Scripts
 

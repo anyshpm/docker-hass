@@ -119,12 +119,14 @@ This project includes an automated system that keeps the Home Assistant base ima
 When a new version is detected, the system:
 1. **Updates** the Dockerfile with the new base image version
 2. **Updates** README badges to reflect the new version
-3. **Tests** the build to ensure compatibility
-4. **Commits** the changes with a descriptive message
-5. **Tags** the release with the Home Assistant version
-6. **Triggers** the CI build pipeline automatically
-7. **Creates** a GitHub issue for manual review
-8. **Sends** an email notification to the repository owner
+3. **Tests** the build and runs container smoke tests to ensure compatibility
+4. **Commits** the changes and pushes an update branch
+5. **Creates** a Pull Request with complete upstream release notes
+6. **Auto-Merges** the PR into the default branch once tests succeed
+7. **Tags** the release with the Home Assistant version and publishes a GitHub Release
+8. **Builds & Pushes** multi-architecture Docker images (`linux/amd64`, `linux/arm64`) to Docker Hub
+9. **Signs** the published image digests with Cosign for supply-chain security
+10. **Sends** a completion summary email notification to the maintainer (zero manual intervention required)
 
 ### 🛠️ **Manual Control**
 ```bash
@@ -139,10 +141,10 @@ gh workflow run update-homeassistant.yml -f force_update=true
 ```
 
 ### 📊 **Monitoring**
-- 💫 All updates create GitHub issues for tracking
-- 🏷️ Release tags are created automatically (e.g., `v2025.4.1`)
-- 🗺️ Detailed logs available in GitHub Actions
-- 📧 Commit messages include links to Home Assistant release notes
+- 🔀 Automated PR creation and auto-merge tracking
+- 🏷️ Release tags and GitHub Releases created automatically (e.g., `2026.11.1`)
+- 🐳 Multi-arch Docker images published and signed automatically
+- 📧 Completion summary email sent once the entire release finishes
 
 > 📝 **Documentation**: See [`docs/AUTO_UPDATE.md`](docs/AUTO_UPDATE.md) for detailed information about the automated update system.
 

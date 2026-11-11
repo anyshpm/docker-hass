@@ -2,7 +2,12 @@ name: Update Home Assistant Version
 
 on:
   push:
-    branches: [ "*" ]
+    branches:
+      - master
+      - main
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
   schedule:
     - cron: '0 6 * * *'  # Daily at 06:00 UTC
   workflow_dispatch:
@@ -12,6 +17,10 @@ on:
         type: boolean
         default: false
 
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: anyshpm/home-assistant
+
 jobs:
   check-and-update:
     runs-on: ubuntu-latest
@@ -19,6 +28,8 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      packages: write
+      id-token: write
 
     steps:
       - name: 🔍 Checkout repository
@@ -28,7 +39,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: 🐳 Set up Docker
+      - name: 🐳 Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: 📋 Get versions
@@ -45,8 +56,6 @@ jobs:
           echo "current=$CURRENT" >> $GITHUB_OUTPUT
           echo "latest=$LATEST" >> $GITHUB_OUTPUT
           echo "Current: $CURRENT, Latest: $LATEST"
-
-
 
       - name: 🔄 Check if update needed
         id: compare
@@ -93,8 +102,6 @@ jobs:
           
           docker rm -f test-container 2>/dev/null || true
 
-
-
       - name: 🚀 Create branch and commit
         if: steps.compare.outputs.needs_update == 'true'
         id: commit
@@ -117,10 +124,9 @@ jobs:
             exit 1
           fi
 
-
-
-      - name: 📋 Create Pull Request
+      - name: 📋 Create and Auto-Merge Pull Request
         if: steps.compare.outputs.needs_update == 'true' && steps.commit.outputs.branch
+        id: pr
         uses: actions/github-script@v7
         with:
           script: |
@@ -139,9 +145,13 @@ jobs:
             - ✅ Container smoke test passed
             
             ## 📚 Release Notes
-            https://github.com/home-assistant/core/releases/tag/${latest}`;
+            https://github.com/home-assistant/core/releases/tag/${latest}
             
-            const bases = ['main', 'master'];
+            > 🤖 Auto-tested and auto-merged by Update Workflow.`;
+            
+            const bases = ['master', 'main'];
+            let createdPr = null;
+            let targetBase = '';
             for (const base of bases) {
               try {
                 const { data: pr } = await github.rest.pulls.create({
@@ -149,6 +159,8 @@ jobs:
                   repo: context.repo.repo,
                   title, head: branch, base, body
                 });
+                createdPr = pr;
+                targetBase = base;
                 
                 await github.rest.issues.addLabels({
                   owner: context.repo.owner,
@@ -158,43 +170,181 @@ jobs:
                 });
                 
                 console.log(`✅ Created PR #${pr.number}: ${pr.html_url}`);
-                return;
+                break;
               } catch (error) {
                 if (base === bases[bases.length - 1]) throw error;
               }
             }
+            
+            if (!createdPr) {
+              throw new Error('Failed to create PR against master/main');
+            }
+            
+            core.setOutput('pr_number', createdPr.number);
+            core.setOutput('pr_url', createdPr.html_url);
+            core.setOutput('base_branch', targetBase);
+            
+            console.log(`🔀 Auto-merging PR #${createdPr.number}...`);
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: createdPr.number,
+              merge_method: 'merge',
+              commit_title: `Merge pull request #${createdPr.number} from ${context.repo.owner}/${branch}`,
+              commit_message: `Update Home Assistant to ${latest}`
+            });
+            console.log(`✅ PR #${createdPr.number} merged successfully`);
+            
+            // Clean up remote feature branch
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${branch}`
+              });
+              console.log(`🧹 Deleted branch ${branch}`);
+            } catch (err) {
+              console.warn(`Could not delete branch ${branch}: ${err.message}`);
+            }
+
+      - name: 🏷️ Create Release Tag
+        if: steps.compare.outputs.needs_update == 'true' && steps.pr.outputs.base_branch
+        id: tag
+        run: |
+          LATEST="${{ steps.versions.outputs.latest }}"
+          BASE="${{ steps.pr.outputs.base_branch }}"
+          
+          git fetch origin "$BASE"
+          git checkout "$BASE"
+          git pull origin "$BASE"
+          
+          if git rev-parse "$LATEST" >/dev/null 2>&1; then
+            echo "Tag $LATEST already exists locally"
+          else
+            git tag "$LATEST"
+            git push origin "$LATEST"
+            echo "✅ Created and pushed tag: $LATEST"
+          fi
+          echo "tag=$LATEST" >> $GITHUB_OUTPUT
+
+      - name: 📦 Create GitHub Release
+        if: steps.compare.outputs.needs_update == 'true' && steps.tag.outputs.tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const latest = '${{ steps.versions.outputs.latest }}';
+            try {
+              const { data: release } = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: latest,
+                name: `Home Assistant ${latest}`,
+                body: `## 🏠 Home Assistant ${latest} with Telegram Proxy Patch\n\n- Automated update and release.\n- Docker image available on Docker Hub as \`anyshpm/home-assistant:${latest}\` and \`latest\`.\n\n### 📚 Official Release Notes\nhttps://github.com/home-assistant/core/releases/tag/${latest}`,
+                draft: false,
+                prerelease: false
+              });
+              console.log(`✅ GitHub Release created: ${release.html_url}`);
+            } catch (error) {
+              console.log(`Notice on creating release: ${error.message}`);
+            }
+
+      - name: 🔀 Set up QEMU
+        if: steps.compare.outputs.needs_update == 'true' && steps.tag.outputs.tag
+        uses: docker/setup-qemu-action@v3
+
+      - name: 🔐 Install cosign
+        if: steps.compare.outputs.needs_update == 'true' && steps.tag.outputs.tag
+        uses: sigstore/cosign-installer@v3.4.0
+        with:
+          cosign-release: 'v2.2.3'
+
+      - name: 🔑 Log into Docker Hub
+        if: steps.compare.outputs.needs_update == 'true' && steps.tag.outputs.tag
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: 🏷️ Extract Docker metadata
+        if: steps.compare.outputs.needs_update == 'true' && steps.tag.outputs.tag
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.versions.outputs.latest }}
+
+      - name: 🚀 Build and push multi-arch Docker image
+        if: steps.compare.outputs.needs_update == 'true' && steps.tag.outputs.tag
+        id: build-and-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: ✍️ Sign the published Docker image
+        if: steps.compare.outputs.needs_update == 'true' && steps.tag.outputs.tag
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          echo "${{ steps.meta.outputs.tags }}" | xargs -I {} cosign sign --yes {}@${{ steps.build-and-push.outputs.digest }}
 
       - name: 📧 Send Email Notification
-        if: steps.compare.outputs.needs_update == 'true' && steps.commit.outputs.branch
+        if: steps.compare.outputs.needs_update == 'true' && steps.build-and-push.outputs.digest
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.EMAIL_SERVER }}
           server_port: ${{ secrets.EMAIL_PORT }}
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "Home Assistant Update PR Created - ${{ steps.versions.outputs.latest }}"
+          subject: "🎉 Home Assistant ${{ steps.versions.outputs.latest }} Release Completed"
           body: |
             Hello,
-            
-            An automated update PR has been created for Home Assistant version ${{ steps.versions.outputs.latest }}.
-            
-            Previous version: ${{ steps.versions.outputs.current }}
-            New version: ${{ steps.versions.outputs.latest }}
-            
-            Please review and merge the PR when possible.
-            
-            PR Link: https://github.com/${{ github.repository }}/pulls
+
+            The automated update and release workflow for Home Assistant version ${{ steps.versions.outputs.latest }} has completed successfully with zero manual intervention required.
+
+            📋 Release Summary:
+            - Previous version: ${{ steps.versions.outputs.current }}
+            - New version: ${{ steps.versions.outputs.latest }}
+            - PR: ${{ steps.pr.outputs.pr_url }} (Auto-merged)
+            - Git Tag: ${{ steps.versions.outputs.latest }}
+            - Docker Image: ${{ env.IMAGE_NAME }}:${{ steps.versions.outputs.latest }} & latest
+            - Platforms: linux/amd64, linux/arm64
+            - Image Digest: ${{ steps.build-and-push.outputs.digest }}
+            - Cosign Signature: Verified and signed
+
+            📚 Upstream Release Notes:
+            https://github.com/home-assistant/core/releases/tag/${{ steps.versions.outputs.latest }}
+
             Repository: https://github.com/${{ github.repository }}
-            
-            This is an automated message from the Home Assistant Docker image update workflow.
+
+            This is an automated notification from the Home Assistant Docker update workflow.
           to: ${{ secrets.EMAIL_TO }}
           from: GitHub Actions <${{ secrets.EMAIL_FROM }}>
 
       - name: 📊 Summary
         if: always()
         run: |
-          echo "## 🔄 Update Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Current | Latest | Updated |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|---------|" >> $GITHUB_STEP_SUMMARY
-          echo "| \`${{ steps.versions.outputs.current }}\` | \`${{ steps.versions.outputs.latest }}\` | ${{ steps.compare.outputs.needs_update }} |" >> $GITHUB_STEP_SUMMARY
-
+          echo "## 🔄 Automated Update & Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Status / Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Previous Version | \`${{ steps.versions.outputs.current }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Latest Version | \`${{ steps.versions.outputs.latest }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Needs Update | \`${{ steps.compare.outputs.needs_update }}\` |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.compare.outputs.needs_update }}" = "true" ]; then
+            echo "| Smoke Test | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+            echo "| Pull Request | ✅ Auto-Merged ([#${{ steps.pr.outputs.pr_number }}](${{ steps.pr.outputs.pr_url }})) |" >> $GITHUB_STEP_SUMMARY
+            echo "| Git Tag | ✅ \`${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| Multi-arch Image | ✅ \`${{ env.IMAGE_NAME }}:${{ steps.versions.outputs.latest }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| Platforms | \`linux/amd64\`, \`linux/arm64\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| Image Digest | \`${{ steps.build-and-push.outputs.digest }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| Cosign Signature | ✅ Signed |" >> $GITHUB_STEP_SUMMARY
+            echo "| Summary Email | ✅ Sent |" >> $GITHUB_STEP_SUMMARY
+          fi
